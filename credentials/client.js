@@ -1,4 +1,4 @@
-const firebaseConfig = {
+module.exports = {
   apiKey: "AIzaSyAGRUzY-KHyZsimSLHOCn9fYhge8FgN5qw",
   authDomain: "crwn-db-e0911.firebaseapp.com",
   databaseURL: "https://crwn-db-e0911.firebaseio.com",

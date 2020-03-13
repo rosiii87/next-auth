@@ -1,4 +1,4 @@
-const serverFirebaseConfig = {
+module.exports = {
   type: "service_account",
   project_id: "crwn-db-e0911",
   private_key_id: "4a1c13e37668814aea3b44b80cd0d50c6559f266",

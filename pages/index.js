@@ -1,203 +1,142 @@
-import Head from 'next/head'
+import React from "react";
 
-const Home = () => (
-  <div className="container">
-    <Head>
-      <title>Create Next App</title>
-      <link rel="icon" href="/favicon.ico" />
-    </Head>
+import firebase from "firebase/app";
+import "firebase/auth";
+import "firebase/firestore";
+import "isomorphic-unfetch";
+import clientCredentials from "../credentials/client";
 
-    <main>
-      <h1 className="title">
-        Welcome to <a href="https://nextjs.org">Next.js!</a>
-      </h1>
+export default class Index extends React.Component {
+  static async getInitalProps({ req, query }) {
+    const user = req && req.session ? req.session.decodedToken : null;
+    // don't fetch anything from firebase if the user is not found
 
-      <p className="description">
-        Get started by editing <code>pages/index.js</code>
-      </p>
+    // const snap = user && await req.firebaseServer.database().ref('messages').once('value')
+    // const messages = snap && snap.val()
 
-      <div className="grid">
-        <a href="https://nextjs.org/docs" className="card">
-          <h3>Documentation &rarr;</h3>
-          <p>Find in-depth information about Next.js features and API.</p>
-        </a>
+    const messages = null;
+    return { user, messages };
+  }
 
-        <a href="https://nextjs.org/learn" className="card">
-          <h3>Learn &rarr;</h3>
-          <p>Learn about Next.js in an interactive course with quizzes!</p>
-        </a>
+  constructor(props) {
+    super(props);
+    this.state = {
+      user: this.props.user,
+      value: "",
+      messages: this.props.messages
+    };
 
-        <a
-          href="https://github.com/zeit/next.js/tree/master/examples"
-          className="card"
-        >
-          <h3>Examples &rarr;</h3>
-          <p>Discover and deploy boilerplate example Next.js projects.</p>
-        </a>
+    this.addDbListener = this.addDbListener.bind(this);
+    this.removeDbListener = this.removeDbListener.bind(this);
+    this.handleChange = this.handleChange.bind(this);
+    this.handleSubmit = this.handleSubmit.bind(this);
+  }
 
-        <a
-          href="https://zeit.co/import?filter=next.js&utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          className="card"
-        >
-          <h3>Deploy &rarr;</h3>
-          <p>
-            Instantly deploy your Next.js site to a public URL with ZEIT Now.
-          </p>
-        </a>
+  componentDidMount() {
+    firebase.initializeApp(clientCredentials);
+    if (this.state.user) this.addDbListener();
+
+    firebase.auth().onAuthStateChanged(user => {
+      if (user) {
+        this.setState({ user: user });
+        return user
+          .getIdToken()
+          .then(token => {
+            return fetch("/api/login", {
+              method: "POST",
+              headers: new Headers({ "Content-type": "application/json" }),
+              credentials: "same-origin",
+              body: JSON.stringify({ token })
+            });
+          })
+          .then(res => this.addDbListener());
+      } else {
+        this.setState({ user: null });
+        fetch("/api/logout", {
+          method: "POST",
+          credentials: "same-origin"
+        }).then(() => this.removeDbListener());
+      }
+    });
+  }
+
+  addDbListener() {
+    var db = firebase.firestore();
+    let unsubscribe = db.collection("messages").onSnapshot(
+      querySnapshot => {
+        var messages = {};
+        querySnapshot.forEach(function(doc) {
+          messages[doc.id] = doc.data();
+        });
+        if (messages) this.setState({ messages });
+      },
+      error => {
+        console.log(error);
+      }
+    );
+    this.setState({ unsubscribe });
+  }
+
+  removeDbListener() {
+    // firebase.database().ref('messages').off()
+    if (this.state.unsubscribe) {
+      this.state.unsubscribe();
+    }
+  }
+
+  handleChange(event) {
+    this.setState({ value: event.target.value });
+  }
+
+  handleSubmit(event) {
+    event.preventDefault();
+    var db = firebase.firestore();
+    const date = new Date().getTime();
+    db.collection("messages")
+      .doc(`${date}`)
+      .set({
+        id: date,
+        text: this.state.value
+      });
+    this.setState({ value: "" });
+  }
+
+  handleLogin() {
+    firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
+  }
+
+  handleLogout() {
+    firebase.auth().signOut();
+  }
+
+  render() {
+    const { user, value, messages } = this.state;
+    return (
+      <div>
+        {user ? (
+          <button onClick={this.handleLogout}>Logout</button>
+        ) : (
+          <button onClick={this.handleLogin}>Login</button>
+        )}
+        {user && (
+          <div>
+            <form onSubmit={this.handleSubmit}>
+              <input
+                type={"text"}
+                onChange={this.handleChange}
+                placeholder={"add message..."}
+                value={value}
+              />
+            </form>
+            <ul>
+              {messages &&
+                Object.keys(messages).map(key => (
+                  <li key={key}>{messages[key].text}</li>
+                ))}
+            </ul>
+          </div>
+        )}
       </div>
-    </main>
-
-    <footer>
-      <a
-        href="https://zeit.co?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        Powered by <img src="/zeit.svg" alt="ZEIT Logo" />
-      </a>
-    </footer>
-
-    <style jsx>{`
-      .container {
-        min-height: 100vh;
-        padding: 0 0.5rem;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-      }
-
-      main {
-        padding: 5rem 0;
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-      }
-
-      footer {
-        width: 100%;
-        height: 100px;
-        border-top: 1px solid #eaeaea;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-      }
-
-      footer img {
-        margin-left: 0.5rem;
-      }
-
-      footer a {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-      }
-
-      a {
-        color: inherit;
-        text-decoration: none;
-      }
-
-      .title a {
-        color: #0070f3;
-        text-decoration: none;
-      }
-
-      .title a:hover,
-      .title a:focus,
-      .title a:active {
-        text-decoration: underline;
-      }
-
-      .title {
-        margin: 0;
-        line-height: 1.15;
-        font-size: 4rem;
-      }
-
-      .title,
-      .description {
-        text-align: center;
-      }
-
-      .description {
-        line-height: 1.5;
-        font-size: 1.5rem;
-      }
-
-      code {
-        background: #fafafa;
-        border-radius: 5px;
-        padding: 0.75rem;
-        font-size: 1.1rem;
-        font-family: Menlo, Monaco, Lucida Console, Liberation Mono,
-          DejaVu Sans Mono, Bitstream Vera Sans Mono, Courier New, monospace;
-      }
-
-      .grid {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-wrap: wrap;
-
-        max-width: 800px;
-        margin-top: 3rem;
-      }
-
-      .card {
-        margin: 1rem;
-        flex-basis: 45%;
-        padding: 1.5rem;
-        text-align: left;
-        color: inherit;
-        text-decoration: none;
-        border: 1px solid #eaeaea;
-        border-radius: 10px;
-        transition: color 0.15s ease, border-color 0.15s ease;
-      }
-
-      .card:hover,
-      .card:focus,
-      .card:active {
-        color: #0070f3;
-        border-color: #0070f3;
-      }
-
-      .card h3 {
-        margin: 0 0 1rem 0;
-        font-size: 1.5rem;
-      }
-
-      .card p {
-        margin: 0;
-        font-size: 1.25rem;
-        line-height: 1.5;
-      }
-
-      @media (max-width: 600px) {
-        .grid {
-          width: 100%;
-          flex-direction: column;
-        }
-      }
-    `}</style>
-
-    <style jsx global>{`
-      html,
-      body {
-        padding: 0;
-        margin: 0;
-        font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
-          Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-    `}</style>
-  </div>
-)
-
-export default Home
+    );
+  }
+}
